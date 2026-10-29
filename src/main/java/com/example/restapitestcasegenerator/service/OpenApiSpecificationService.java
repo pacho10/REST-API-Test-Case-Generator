@@ -2,12 +2,13 @@ package com.example.restapitestcasegenerator.service;
 
 import com.example.restapitestcasegenerator.dto.ParsedOpenApiResponse;
 import com.example.restapitestcasegenerator.dto.ParsedOperationResponse;
+import com.example.restapitestcasegenerator.exception.InvalidOpenApiSpecificationException;
+import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.parser.core.models.ParseOptions;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
-import io.swagger.v3.parser.OpenAPIV3Parser;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -23,25 +24,40 @@ public class OpenApiSpecificationService {
     private static final String SAMPLE_SPECIFICATION = "openapi/sample-pet-api.yaml";
 
     public ParsedOpenApiResponse parseSampleSpecification() {
-        String specification = readSampleSpecification();
+        return parseSpecification(readSampleSpecification());
+    }
+
+    public ParsedOpenApiResponse parseSpecification(String specification) {
+        if (specification == null || specification.isBlank()) {
+            throw new InvalidOpenApiSpecificationException(
+                    List.of("The specification must not be empty."));
+        }
+
         ParseOptions options = new ParseOptions();
-        options.setResolve(true);
+        options.setResolve(false);
+        options.setResolveFully(false);
 
         SwaggerParseResult parseResult = new OpenAPIV3Parser()
                 .readContents(specification, null, options);
         OpenAPI openApi = parseResult.getOpenAPI();
         if (openApi == null) {
-            throw new IllegalStateException("The bundled OpenAPI sample could not be parsed: "
-                    + String.join("; ", parseResult.getMessages()));
+            List<String> errors = parseResult.getMessages();
+            if (errors == null || errors.isEmpty()) {
+                errors = List.of("The document could not be parsed as an OpenAPI specification.");
+            }
+            throw new InvalidOpenApiSpecificationException(errors);
         }
 
         List<ParsedOperationResponse> operations = extractOperations(openApi);
+        List<String> warnings = parseResult.getMessages() == null
+                ? List.of()
+                : List.copyOf(parseResult.getMessages());
         return new ParsedOpenApiResponse(
-                openApi.getInfo().getTitle(),
-                openApi.getInfo().getVersion(),
-                openApi.getInfo().getDescription(),
+                openApi.getInfo() == null ? null : openApi.getInfo().getTitle(),
+                openApi.getInfo() == null ? null : openApi.getInfo().getVersion(),
+                openApi.getInfo() == null ? null : openApi.getInfo().getDescription(),
                 operations,
-                parseResult.getMessages());
+                warnings);
     }
 
     private String readSampleSpecification() {
@@ -54,10 +70,19 @@ public class OpenApiSpecificationService {
 
     private List<ParsedOperationResponse> extractOperations(OpenAPI openApi) {
         List<ParsedOperationResponse> operations = new ArrayList<>();
+        if (openApi.getPaths() == null) {
+            return List.of();
+        }
         for (Map.Entry<String, PathItem> pathEntry : openApi.getPaths().entrySet()) {
+            if (pathEntry.getValue() == null) {
+                continue;
+            }
             for (Map.Entry<PathItem.HttpMethod, Operation> operationEntry
                     : pathEntry.getValue().readOperationsMap().entrySet()) {
                 Operation operation = operationEntry.getValue();
+                if (operation == null) {
+                    continue;
+                }
                 operations.add(new ParsedOperationResponse(
                         operationEntry.getKey().name(),
                         pathEntry.getKey(),
