@@ -5,6 +5,7 @@ import com.example.restapitestcasegenerator.dto.InputLocation;
 import com.example.restapitestcasegenerator.dto.ParsedInputFieldResponse;
 import com.example.restapitestcasegenerator.dto.ParsedOperationResponse;
 import com.example.restapitestcasegenerator.exception.InvalidOpenApiSpecificationException;
+import com.example.restapitestcasegenerator.exception.UnsupportedOpenApiSpecificationException;
 import io.swagger.v3.parser.OpenAPIV3Parser;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -26,11 +27,19 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class OpenApiSpecificationService {
 
     private static final String SAMPLE_SPECIFICATION = "openapi/sample-pet-api.yaml";
+    private static final Pattern OPENAPI_VERSION = Pattern.compile(
+            "(?:\\\"openapi\\\"\\s*:\\s*\\\"|^\\s*openapi\\s*:\\s*['\\\"]?)([0-9]+(?:\\.[0-9]+){1,2})",
+            Pattern.MULTILINE);
+    private static final Pattern SWAGGER_VERSION = Pattern.compile(
+            "(?:\\\"swagger\\\"\\s*:\\s*\\\"|^\\s*swagger\\s*:\\s*['\\\"]?)([0-9]+(?:\\.[0-9]+){1,2})",
+            Pattern.MULTILINE);
 
     public ParsedOpenApiResponse parseSampleSpecification() {
         return parseSpecification(readSampleSpecification());
@@ -42,12 +51,29 @@ public class OpenApiSpecificationService {
                     List.of("The specification must not be empty."));
         }
 
+        String swaggerVersion = findVersion(SWAGGER_VERSION, specification);
+        if (swaggerVersion != null) {
+            throw new UnsupportedOpenApiSpecificationException(
+                    "Swagger " + swaggerVersion + " is not supported. Submit an OpenAPI 3.0 or 3.1 specification.");
+        }
+        String declaredOpenApiVersion = findVersion(OPENAPI_VERSION, specification);
+        if (declaredOpenApiVersion != null && !isSupportedOpenApiVersion(declaredOpenApiVersion)) {
+            throw unsupportedVersion(declaredOpenApiVersion);
+        }
+
         ParseOptions options = new ParseOptions();
         options.setResolve(false);
         options.setResolveFully(false);
 
-        SwaggerParseResult parseResult = new OpenAPIV3Parser()
-                .readContents(specification, null, options);
+        SwaggerParseResult parseResult;
+        try {
+            parseResult = new OpenAPIV3Parser().readContents(specification, null, options);
+        } catch (RuntimeException exception) {
+            String error = exception.getMessage() == null || exception.getMessage().isBlank()
+                    ? "The document could not be parsed as OpenAPI JSON or YAML."
+                    : exception.getMessage();
+            throw new InvalidOpenApiSpecificationException(List.of(error));
+        }
         OpenAPI openApi = parseResult.getOpenAPI();
         if (openApi == null) {
             List<String> errors = parseResult.getMessages();
@@ -55,6 +81,9 @@ public class OpenApiSpecificationService {
                 errors = List.of("The document could not be parsed as an OpenAPI specification.");
             }
             throw new InvalidOpenApiSpecificationException(errors);
+        }
+        if (!isSupportedOpenApiVersion(openApi.getOpenapi())) {
+            throw unsupportedVersion(openApi.getOpenapi());
         }
 
         List<ParsedOperationResponse> operations = extractOperations(openApi);
@@ -67,6 +96,20 @@ public class OpenApiSpecificationService {
                 openApi.getInfo() == null ? null : openApi.getInfo().getDescription(),
                 operations,
                 warnings);
+    }
+
+    private String findVersion(Pattern pattern, String specification) {
+        Matcher matcher = pattern.matcher(specification);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private boolean isSupportedOpenApiVersion(String version) {
+        return version != null && (version.startsWith("3.0.") || version.startsWith("3.1."));
+    }
+
+    private UnsupportedOpenApiSpecificationException unsupportedVersion(String version) {
+        return new UnsupportedOpenApiSpecificationException(
+                "OpenAPI version " + version + " is not supported. Submit an OpenAPI 3.0 or 3.1 specification.");
     }
 
     private String readSampleSpecification() {

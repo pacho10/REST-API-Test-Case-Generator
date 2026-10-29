@@ -43,3 +43,12 @@ curl -X POST http://localhost:8080/api/openapi/test-cases \
 
 The generator produces valid-input, missing-required-field, invalid-type, and supported boundary-value scenarios for each parsed operation.
 Boundary scenarios are generated for numeric `minimum`/`maximum`, string `minLength`/`maxLength`, and array `minItems`/`maxItems` constraints. Sample values are stable across runs.
+
+Upload an OpenAPI JSON or YAML file from Postman using a `multipart/form-data` request with a file part named `file`, or use curl:
+
+```bash
+curl -X POST http://localhost:8080/api/test-cases/generate \
+  -F "file=@openapi.yaml;type=application/yaml"
+```
+
+Successful requests return a JSON array of generated scenarios. Invalid files return HTTP 400, and unsupported specification versions return HTTP 422 with a consistent problem response.
