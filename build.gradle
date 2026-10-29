@@ -20,4 +20,10 @@ dependencies {
     implementation platform('org.springframework.boot:spring-boot-dependencies:4.1.2')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'io.swagger.parser.v3:swagger-parser:2.1.48'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }

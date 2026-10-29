@@ -32,3 +32,14 @@ curl -X POST http://localhost:8080/api/openapi/parse \
 ```
 
 For YAML, use `Content-Type: application/yaml` and pass the YAML file as the request body. Invalid or empty specifications return HTTP 400 with parser details.
+
+Generate deterministic test scenarios directly from a valid specification:
+
+```bash
+curl -X POST http://localhost:8080/api/openapi/test-cases \
+  -H "Content-Type: application/yaml" \
+  --data-binary @openapi.yaml
+```
+
+The generator produces valid-input, missing-required-field, invalid-type, and supported boundary-value scenarios for each parsed operation.
+Boundary scenarios are generated for numeric `minimum`/`maximum`, string `minLength`/`maxLength`, and array `minItems`/`maxItems` constraints. Sample values are stable across runs.

@@ -33,6 +33,8 @@ paths:
           required: true
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
       responses:
         '200':
           description: The requested pet.
@@ -45,5 +47,9 @@ components:
       properties:
         id:
           type: integer
+          minimum: 1
+          maximum: 100
         name:
           type: string
+          minLength: 1
+          maxLength: 80
