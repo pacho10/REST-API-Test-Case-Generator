@@ -15,4 +15,10 @@ A Java and Spring Boot application for generating test cases from OpenAPI specif
 
 On Windows, run `gradlew.bat bootRun`.
 
-The application currently contains only the Spring Boot project scaffold. OpenAPI parsing and test case generation will be added in later development steps.
+The application includes a sample OpenAPI specification and a parsing endpoint:
+
+```text
+GET /api/openapi/sample
+```
+
+The response contains the specification title, version, description, operations, and parser warnings. This initial sample is read from the classpath and is not stored in a database.
